@@ -1,0 +1,42 @@
+{
+  "image_filename": "dummy_invoice.png",
+  "instructions": "Extract invoice details accurately.",
+  "fields": [
+    {
+      "name": "invoice_number",
+      "type": "string",
+      "required": true,
+      "description": "Invoice ID or number"
+    },
+    {
+      "name": "vendor_name",
+      "type": "string",
+      "required": true,
+      "description": "Seller name"
+    },
+    {
+      "name": "invoice_date",
+      "type": "string",
+      "required": true,
+      "description": "Date of the invoice, show exactly as it appears on the document. Do not convert to ISO format or other formats, just extract as-is."
+    },
+    {
+      "name": "total_amount",
+      "type": "float",
+      "required": true,
+      "description": "Total amount due"
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "required": false,
+      "description": "Currency code or symbol"
+    },
+    {
+      "name": "line_items",
+      "type": "list[string]",
+      "required": false,
+      "description": "List of item names"
+    }
+  ]
+}

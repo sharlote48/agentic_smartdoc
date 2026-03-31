@@ -1,0 +1,83 @@
+Running image mode with: dummy_invoice.png
+Attempt 1: Sending extraction request
+Instructions:
+Extract the requested data accurately from the document.
+
+Extracted data: {
+  "invoice_number": "INV-2022103",
+  "vendor_name": "ABC COMPANY",
+  "invoice_date": "The 12th of June, 22",
+  "total_amount": 3236.0,
+  "currency": "$",
+  "line_items": [
+    "Consulting Services",
+    "Software License",
+    "Hardware Equipment"
+  ]
+}
+Attempt 1 failed validation:
+'currency' value '$' not in allowed list: ['USD', 'EUR', 'SGD'] | Field 'invoice_date' failed date validation.
+Calling reflection agent...
+
+Updated Instructions:
+Extract the requested data accurately from the document. For the 'currency' field, use the ISO currency code (e.g., USD, EUR, SGD). For the 'invoice_date' field, extract the date exactly as it appears on the document, ensuring it is a valid date format.
+
+------------------------------------------------------------
+
+Attempt 2: Sending extraction request
+Instructions:
+Extract the requested data accurately from the document. For the 'currency' field, use the ISO currency code (e.g., USD, EUR, SGD). For the 'invoice_date' field, extract the date exactly as it appears on the document, ensuring it is a valid date format.
+
+Extracted data: {
+  "invoice_number": "INV-2022103",
+  "vendor_name": "ABC COMPANY",
+  "invoice_date": "The 12th of June, 22",
+  "total_amount": 3236.0,
+  "currency": "USD",
+  "line_items": [
+    "Consulting Services",
+    "Software License",
+    "Hardware Equipment"
+  ]
+}
+Attempt 2 failed validation:
+Field 'invoice_date' failed date validation.
+Calling reflection agent...
+
+Updated Instructions:
+Extract the requested data accurately from the document. For the 'currency' field, use the ISO currency code (e.g., USD, EUR, SGD). For the 'invoice_date' field, extract the date and convert it to YYYY-MM-DD format.
+
+------------------------------------------------------------
+
+Attempt 3: Sending extraction request
+Instructions:
+Extract the requested data accurately from the document. For the 'currency' field, use the ISO currency code (e.g., USD, EUR, SGD). For the 'invoice_date' field, extract the date and convert it to YYYY-MM-DD format.
+
+Extracted data: {
+  "invoice_number": "INV-2022103",
+  "vendor_name": "ABC COMPANY",
+  "invoice_date": "The 12th of June, 22",
+  "total_amount": 3236.0,
+  "currency": "USD",
+  "line_items": [
+    "Consulting Services",
+    "Software License",
+    "Hardware Equipment"
+  ]
+}
+Attempt 3 failed validation:
+Field 'invoice_date' failed date validation.
+Calling reflection agent...
+
+Updated Instructions:
+Extract the requested data accurately from the document. For the 'currency' field, use the ISO currency code (e.g., USD, EUR, SGD). For the 'invoice_date' field, extract the date and convert it to YYYY-MM-DD format. Ensure the date is parsed correctly, even if it includes ordinal numbers (e.g., "12th").
+
+------------------------------------------------------------
+
+{
+  "status": "invalid",
+  "attempt": 3,
+  "mode": "image",
+  "feedback": "Field 'invoice_date' failed date validation.",
+  "extracted_data": {}
+}

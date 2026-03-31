@@ -1,0 +1,27 @@
+{
+  "data": {
+    "currency": "USD",
+    "invoice_date": "2026-03-25",
+    "total_amount": 120.5
+  },
+  "rules": [
+    {
+      "field_name": "currency",
+      "rule_type": "enum",
+      "criteria": ["USD", "EUR", "SGD"]
+    },
+    {
+      "field_name": "invoice_date",
+      "rule_type": "date",
+      "criteria": ""
+    },
+    {
+      "field_name": "total_amount",
+      "rule_type": "range",
+      "criteria": {
+        "min": 0,
+        "max": 10000
+      }
+    }
+  ]
+}
