@@ -1,0 +1,37 @@
+{
+  "fields": [
+    {
+      "name": "invoice_number",
+      "type": "string",
+      "required": true,
+      "description": "Invoice ID or number"
+    },
+    {
+      "name": "vendor_name",
+      "type": "string",
+      "required": true,
+      "description": "Seller name"
+    },
+    {
+      "name": "invoice_date",
+      "type": "string",
+      "required": true,
+      "description": "Date of the invoice as shown in the document"
+    },
+    {
+      "name": "total_amount",
+      "type": "float",
+      "required": true,
+      "description": "Total amount due"
+    }
+  ],
+  "previous_extraction": {
+    "invoice_number": "INV-1001",
+    "vendor_name": "Acme Supplies",
+    "invoice_date": "2026-03-25",
+    "total_amount": 120.5
+  },
+  "validation_feedback": "invoice_date format is inconsistent with expected rule.",
+  "attempt_history": [],
+  "current_instructions": "Extract the requested data accurately from the document."
+}

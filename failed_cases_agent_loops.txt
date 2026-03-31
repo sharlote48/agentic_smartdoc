@@ -1,0 +1,193 @@
+uv run agentic_loop.py
+Running image mode with: dummy_invoice.png
+Current extraction payload: {
+  "image_filename": "dummy_invoice.png",
+  "fields": [
+    {
+      "name": "invoice_number",
+      "type": "string",
+      "required": true,
+      "description": "Invoice ID or number"
+    },
+    {
+      "name": "vendor_name",
+      "type": "string",
+      "required": true,
+      "description": "Seller name"
+    },
+    {
+      "name": "invoice_date",
+      "type": "string",
+      "required": true,
+      "description": "Date of the invoice, show exactly as it appears on the document. Do not convert to ISO format or other formats, just extract as-is."
+    },
+    {
+      "name": "total_amount",
+      "type": "float",
+      "required": true,
+      "description": "Total amount due"
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "required": false,
+      "description": "Currency code or symbol"
+    },
+    {
+      "name": "line_items",
+      "type": "list[string]",
+      "required": false,
+      "description": "List of item names"
+    }
+  ],
+  "instructions": "Extract the requested data accurately from the document."
+}
+Attempt 1: Sending extraction request with instructions:
+Extract the requested data accurately from the document.
+
+Extracted data: {
+  "invoice_number": "INV-2022103",
+  "vendor_name": "ABC COMPANY",
+  "invoice_date": "The 12th of June, 22",
+  "total_amount": 3236.0,
+  "currency": "$",
+  "line_items": [
+    "Consulting Services",
+    "Software License",
+    "Hardware Equipment"
+  ]
+}
+Attempt 1 failed validation: 'currency' value '$' not in allowed list: ['USD', 'EUR', 'SGD'] | Field 'invoice_date' failed date validation.
+Current extraction payload: {
+  "image_filename": "dummy_invoice.png",
+  "fields": [
+    {
+      "name": "invoice_number",
+      "type": "string",
+      "required": true,
+      "description": "Invoice ID or number"
+    },
+    {
+      "name": "vendor_name",
+      "type": "string",
+      "required": true,
+      "description": "Seller name"
+    },
+    {
+      "name": "invoice_date",
+      "type": "string",
+      "required": true,
+      "description": "Date of the invoice, show exactly as it appears on the document. Do not convert to ISO format or other formats, just extract as-is."
+    },
+    {
+      "name": "total_amount",
+      "type": "float",
+      "required": true,
+      "description": "Total amount due"
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "required": false,
+      "description": "Currency code or symbol"
+    },
+    {
+      "name": "line_items",
+      "type": "list[string]",
+      "required": false,
+      "description": "List of item names"
+    }
+  ],
+  "instructions": "Extract the requested data accurately from the document.\n\n--- ATTENTION: PREVIOUS ATTEMPT FAILED ---\nYour last extraction was rejected for the following reasons:\n'currency' value '$' not in allowed list: ['USD', 'EUR', 'SGD'] | Field 'invoice_date' failed date validation.\nPlease review the document again and ensure the new output satisfies these rules."
+}
+Attempt 2: Sending extraction request with instructions:
+Extract the requested data accurately from the document.
+
+--- ATTENTION: PREVIOUS ATTEMPT FAILED ---
+Your last extraction was rejected for the following reasons:
+'currency' value '$' not in allowed list: ['USD', 'EUR', 'SGD'] | Field 'invoice_date' failed date validation.
+Please review the document again and ensure the new output satisfies these rules.
+
+Extracted data: {
+  "invoice_number": "INV-2022103",
+  "vendor_name": "ABC COMPANY",
+  "invoice_date": "The 12th of June, 22",
+  "total_amount": 3236.0,
+  "currency": "USD",
+  "line_items": [
+    "Consulting Services",
+    "Software License",
+    "Hardware Equipment"
+  ]
+}
+Attempt 2 failed validation: Field 'invoice_date' failed date validation.
+Current extraction payload: {
+  "image_filename": "dummy_invoice.png",
+  "fields": [
+    {
+      "name": "invoice_number",
+      "type": "string",
+      "required": true,
+      "description": "Invoice ID or number"
+    },
+    {
+      "name": "vendor_name",
+      "type": "string",
+      "required": true,
+      "description": "Seller name"
+    },
+    {
+      "name": "invoice_date",
+      "type": "string",
+      "required": true,
+      "description": "Date of the invoice, show exactly as it appears on the document. Do not convert to ISO format or other formats, just extract as-is."
+    },
+    {
+      "name": "total_amount",
+      "type": "float",
+      "required": true,
+      "description": "Total amount due"
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "required": false,
+      "description": "Currency code or symbol"
+    },
+    {
+      "name": "line_items",
+      "type": "list[string]",
+      "required": false,
+      "description": "List of item names"
+    }
+  ],
+  "instructions": "Extract the requested data accurately from the document.\n\n--- ATTENTION: PREVIOUS ATTEMPT FAILED ---\nYour last extraction was rejected for the following reasons:\nField 'invoice_date' failed date validation.\nPlease review the document again and ensure the new output satisfies these rules."
+}
+Attempt 3: Sending extraction request with instructions:
+Extract the requested data accurately from the document.
+
+--- ATTENTION: PREVIOUS ATTEMPT FAILED ---
+Your last extraction was rejected for the following reasons:
+Field 'invoice_date' failed date validation.
+Please review the document again and ensure the new output satisfies these rules.
+
+Extracted data: {
+  "invoice_number": "INV-2022103",
+  "vendor_name": "ABC COMPANY",
+  "invoice_date": "The 12th of June, 22",
+  "total_amount": 3236.0,
+  "currency": "$",
+  "line_items": [
+    "Consulting Services",
+    "Software License",
+    "Hardware Equipment"
+  ]
+}
+Attempt 3 failed validation: 'currency' value '$' not in allowed list: ['USD', 'EUR', 'SGD'] | Field 'invoice_date' failed date validation.
+{
+  "status": "invalid",
+  "attempt": 3,
+  "mode": "image",
+  "feedback": "'currency' value '$' not in allowed list: ['USD', 'EUR', 'SGD'] | Field 'invoice_date' failed date validation.",
+  "extracted_data": {}
+}
