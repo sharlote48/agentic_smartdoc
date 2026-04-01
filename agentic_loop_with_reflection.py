@@ -12,7 +12,7 @@ async def universal_agent_loop(
     *,
     image_filename: str = "dummy_invoice.png",
     base_url: str = "http://127.0.0.1:8000",
-    max_attempts: int = 3,
+    max_attempts: int = 5,
 ) -> Dict[str, Any]:
     """Run extraction -> validation -> reflection loop."""
 

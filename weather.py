@@ -78,7 +78,7 @@ def create_weather_agent() -> object:
         raise ValueError("Please set GOOGLE_API_KEY or GENAI_API_KEY in .env")
 
     llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash-lite",
+    model="gemini-2.5-flash",
     thinking_budget = 1024,
     include_thoughts=True,
     temperature=0.7,
