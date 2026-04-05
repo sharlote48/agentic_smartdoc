@@ -442,3 +442,7 @@ uv run agentic_loop_with_reflection.py
 1. The service is named `document-processing` in the health endpoint because extraction, validation, and reflection are deployed under one FastAPI app.
 2. `dummy_invoice.png` is the sample image used by extraction and agentic loop demos.
 3. Reflection does not change field names or types. It only rewrites extraction instructions.
+
+
+## TODO:
+To add LLM-as-Judge as evaluation methods
