@@ -34,31 +34,7 @@ All routes are served from the same base endpoint, for example:
 
 ## Architecture Diagram
 
-```mermaid
-flowchart TD
-	A[Client or Runner] --> B[main.py FastAPI App]
-	B --> C[/extract]
-	B --> D[/extract-image]
-	B --> E[/validate]
-	B --> F[/reflect]
-
-	C --> G[extraction_service.py]
-	D --> G
-	E --> H[validation_service.py]
-	F --> I[reflection.py]
-
-	G --> J[Gemini 2.5 Flash]
-	I --> J
-
-	K[agentic_loop.py] --> D
-	K --> E
-
-	L[agentic_loop_with_reflection.py] --> D
-	L --> E
-	L --> F
-
-	M[api_run.py] --> B
-```
+<img width="1440" height="1040" alt="image" src="https://github.com/user-attachments/assets/b7e16a74-25aa-419c-873f-26567e544c40" />
 
 ## Project Structure
 
@@ -116,6 +92,33 @@ If you are using `uv`:
 ```bash
 uv sync
 ```
+## Example Workflow
+
+1. Put your Gemini API key in `.env`
+2. Start API:
+
+```bash
+uv run main.py
+```
+
+3. Run direct service tests:
+
+```bash
+uv run api_run.py
+```
+
+4. Run agentic loop without reflection:
+
+```bash
+uv run agentic_loop.py
+```
+
+5. Run agentic loop with reflection:
+
+```bash
+uv run agentic_loop_with_reflection.py
+```
+
 
 ## Run The API
 
@@ -404,40 +407,8 @@ git push
 
 If secrets were ever pushed, rotate them.
 
-### 3. `origin` remote does not exist
 
-Add it:
 
-```bash
-git remote add origin https://github.com/<user>/<repo>.git
-```
-
-## Example Workflow
-
-1. Put your Gemini API key in `.env`
-2. Start API:
-
-```bash
-uv run main.py
-```
-
-3. Run direct service tests:
-
-```bash
-uv run api_run.py
-```
-
-4. Run agentic loop without reflection:
-
-```bash
-uv run agentic_loop.py
-```
-
-5. Run agentic loop with reflection:
-
-```bash
-uv run agentic_loop_with_reflection.py
-```
 
 ## Notes
 
