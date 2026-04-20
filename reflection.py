@@ -35,7 +35,7 @@ def _create_llm() -> ChatGoogleGenerativeAI:
         raise ValueError("Set GOOGLE_API_KEY or GENAI_API_KEY in environment/.env")
 
     return ChatGoogleGenerativeAI(
-        model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite"),
         temperature=0,
         max_retries=3,
     )

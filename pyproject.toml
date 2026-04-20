@@ -1,7 +1,8 @@
 [project]
-name = "langchain-langgraph"
+name = "agentic_smartdoc"
 version = "0.1.0"
-description = "Add your description here"
+description = "Multi-agent document processing service built with FastAPI, LangChain, and Gemini for document extraction, validation, and reflection workflows"
+authors = [{name = "Nan Li"}]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

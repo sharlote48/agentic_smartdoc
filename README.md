@@ -97,11 +97,8 @@ Key files:
 11. `dummy_invoice.png`
 		Sample invoice image used by extraction and agentic loops.
 
-## Requirements
-
-1. Python 3.11+
-2. `uv` installed
-3. Gemini API key in `.env`
+12. `natural_language_parser.py`
+	CLI helper that converts natural language extraction requests into the same payload schema used by `payload.json`.
 
 Example `.env`:
 
@@ -300,6 +297,11 @@ Use the interactive runner:
 ```bash
 uv run api_run.py
 ```
+
+When extraction is selected, `api_run.py` now gives two input options:
+
+1. Use the existing `payload.json` file
+2. Enter a natural language extraction request, which is parsed by `natural_language_parser.py` into the same payload schema used by `payload.json`
 
 Available modes:
 
