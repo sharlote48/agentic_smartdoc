@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 import requests
 
+from natural_language_parser import parse_natural_language_to_payload
 
 BASE_URL = "http://127.0.0.1:8000"
 EXTRACTION_PAYLOAD_PATH = Path(__file__).with_name("payload.json")
@@ -58,6 +59,31 @@ def _prompt_validation_data() -> Dict[str, Any]:
 	return parsed
 
 
+def _select_extraction_input_source() -> str:
+	print("Choose extraction payload source:")
+	print("1) Use the existing payload.json file")
+	print("2) Enter a natural language extraction request")
+	choice = input("Enter 1 or 2: ").strip().lower()
+	if choice in ("1", "file"):
+		return "file"
+	if choice in ("2", "nl", "natural", "natural language"):
+		return "natural_language"
+	raise ValueError("Invalid choice. Use 1 or 2.")
+
+
+def _prompt_natural_language_payload() -> Dict[str, Any]:
+	print("Enter a natural language description of the fields to extract.")
+	print("For example: Extract invoice number, vendor name, invoice date, total amount, currency, and line items.")
+	nl_prompt = input("Natural language request: ").strip()
+	if not nl_prompt:
+		raise ValueError("Natural language request cannot be empty.")
+	print("Parsing request into extraction payload...")
+	payload = parse_natural_language_to_payload(nl_prompt)
+	if not isinstance(payload, dict):
+		raise ValueError("Parsed payload must be a JSON object.")
+	return payload
+
+
 def main() -> None:
 	mode = _select_mode()
 
@@ -65,10 +91,14 @@ def main() -> None:
 	validation_payload = None
 
 	if mode in ("extraction", "both", "all"):
-		if not EXTRACTION_PAYLOAD_PATH.exists():
-			raise FileNotFoundError(f"Missing payload file: {EXTRACTION_PAYLOAD_PATH}")
-		with EXTRACTION_PAYLOAD_PATH.open("r", encoding="utf-8") as extraction_payload_file:
-			extraction_payload = json.load(extraction_payload_file)
+		input_source = _select_extraction_input_source()
+		if input_source == "file":
+			if not EXTRACTION_PAYLOAD_PATH.exists():
+				raise FileNotFoundError(f"Missing payload file: {EXTRACTION_PAYLOAD_PATH}")
+			with EXTRACTION_PAYLOAD_PATH.open("r", encoding="utf-8") as extraction_payload_file:
+				extraction_payload = json.load(extraction_payload_file)
+		else:
+			extraction_payload = _prompt_natural_language_payload()
 
 	if mode in ("validation", "both", "all"):
 		if not VALIDATION_PAYLOAD_PATH.exists():
@@ -89,6 +119,8 @@ def main() -> None:
 	extracted_data: Dict[str, Any] = {}
 
 	if mode in ("extraction", "both", "all"):
+		if extraction_payload is None:
+			raise ValueError("Extraction payload is required for extraction mode.")
 		extract_response = requests.post(
 			f"{BASE_URL}/extract-image",
 			json=extraction_payload,

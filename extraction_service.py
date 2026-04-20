@@ -65,13 +65,26 @@ class ExtractionResponse(BaseModel):
 	extracted_data: Dict[str, Any]
 
 
-class ImageExtractionRequest(BaseModel):
+class ImageExtractionPayload(BaseModel):
 	fields: List[ExtractionField] = Field(min_length=1)
 	instructions: Optional[str] = Field(
 		default=None,
 		description="Optional extraction instructions",
 	)
 	image_filename: str = Field(default="dummy_invoice.png")
+
+
+class ImageExtractionRequest(BaseModel):
+	fields: Optional[List[ExtractionField]] = Field(default=None)
+	instructions: Optional[str] = Field(
+		default=None,
+		description="Optional extraction instructions",
+	)
+	image_filename: Optional[str] = Field(default=None)
+	schema: Optional[ImageExtractionPayload] = Field(
+		default=None,
+		description="Optional nested payload schema from parser output",
+	)
 
 
 def _build_dynamic_schema(fields: List[ExtractionField]) -> Type[BaseModel]:
@@ -100,7 +113,7 @@ def _create_llm() -> ChatGoogleGenerativeAI:
 		raise ValueError("Set GOOGLE_API_KEY or GENAI_API_KEY in environment/.env")
 
 	return ChatGoogleGenerativeAI(
-		model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+		model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite"),
 		temperature=0,
 		max_retries=2,
 	)
@@ -163,20 +176,32 @@ def extract_information(payload: ExtractionRequest) -> ExtractionResponse:
 @router.post("/extract-image", response_model=ExtractionResponse)
 def extract_information_from_image(payload: ImageExtractionRequest) -> ExtractionResponse:
 	try:
-		image_path = Path(__file__).parent / payload.image_filename
-		if not image_path.exists():
-			raise HTTPException(status_code=404, detail=f"Image not found: {payload.image_filename}")
+		if payload.schema is not None:
+			use_payload = payload.schema
+		else:
+			use_payload = ImageExtractionPayload(
+				fields=payload.fields or [],
+				instructions=payload.instructions,
+				image_filename=payload.image_filename or "dummy_invoice.png",
+			)
 
-		output_schema = _build_dynamic_schema(payload.fields)
+		if not use_payload.fields:
+			raise HTTPException(status_code=400, detail="Payload must include 'fields' to extract.")
+
+		image_path = Path(__file__).parent / (use_payload.image_filename or "dummy_invoice.png")
+		if not image_path.exists():
+			raise HTTPException(status_code=404, detail=f"Image not found: {use_payload.image_filename}")
+
+		output_schema = _build_dynamic_schema(use_payload.fields)
 		llm = _create_llm()
 		structured_llm = llm.with_structured_output(output_schema)
 
 		schema_lines = [
 			f"- {field.name} ({field.type}) required={field.required}: {field.description}"
-			for field in payload.fields
+			for field in use_payload.fields
 		]
 
-		instructions = payload.instructions or "Extract values grounded in the invoice image only."
+		instructions = use_payload.instructions or "Extract values grounded in the invoice image only."
 		image_b64 = b64encode(image_path.read_bytes()).decode("utf-8")
 
 		messages = [
