@@ -167,3 +167,4 @@ If secrets were ever pushed, rotate them immediately.
 ## Roadmap
 
 - [ ] Add LLM-as-Judge evaluation
+- [ ] Integrate with UI
