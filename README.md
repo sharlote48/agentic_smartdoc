@@ -1,82 +1,41 @@
 # agentic_smartdoc
 
-Agentic document processing service built with FastAPI, LangChain, and Gemini.
+Agentic document processing service built with FastAPI, LangChain, and Gemini. Exposes extraction, validation, and reflection capabilities through a single unified API.
 
-This project exposes three API capabilities under one FastAPI app:
+## How it works
 
-1. Extraction
-2. Validation
-3. Reflection
+The system uses two agents embedded in a modular pipeline:
 
-The system is designed for invoice-like document workflows where an agent:
+**Agent 1 — Schema builder (pre-pipeline)**
+Runs once at integration setup. Converts a user's natural language description into a structured extraction payload. The generated schema is saved and reused across document runs.
 
-1. extracts structured fields from an image
-2. validates the extracted output against rules
-3. reflects on validation failures
-4. retries extraction with improved instructions
+**Agent 2 — Self-correction (in-pipeline)**
+Runs on every document. After extraction, it checks which fields failed validation and retries with improved instructions — using the `/reflect` endpoint to rewrite prompts before each retry.
 
-This README documents the document-processing stack only. It intentionally ignores `weather.py`.
 
-## Overview
+<img width="1440" height="1040" alt="image" src="https://github.com/user-attachments/assets/544c6596-5c76-49ce-877f-ecee77159046" />
 
-The main API entrypoint is `main.py`. It mounts three routers into one service:
 
-1. `extraction_service.py`
-2. `validation_service.py`
-3. `reflection.py`
+## Project structure
 
-All routes are served from the same base endpoint, for example:
+```
+main.py                         # FastAPI entrypoint — mounts all routers
+extraction_service.py           # /extract and /extract-image endpoints
+validation_service.py           # /validate endpoint
+reflection.py                   # /reflect endpoint
+agentic_loop.py                 # Extraction + validation retry loop
+agentic_loop_with_reflection.py # Extraction + validation + reflection loop
+api_run.py                      # Interactive local runner
+natural_language_parser.py      # Converts natural language input to payload schema
+payload.json                    # Extraction input payload
+validation_payload.json         # Validation rules payload
+reflection_payload.json         # Standalone reflection test payload
+dummy_invoice.png               # Sample invoice for testing
+```
 
-1. `http://127.0.0.1:8000/extract`
-2. `http://127.0.0.1:8000/extract-image`
-3. `http://127.0.0.1:8000/validate`
-4. `http://127.0.0.1:8000/reflect`
+## Setup
 
-## Architecture Diagram
-
-<img width="1440" height="1040" alt="image" src="https://github.com/user-attachments/assets/b7e16a74-25aa-419c-873f-26567e544c40" />
-
-## Project Structure
-
-Key files:
-
-1. `main.py`
-	 FastAPI app entrypoint that mounts all service routers.
-
-2. `extraction_service.py`
-	 Extraction endpoints using Gemini structured output.
-
-3. `validation_service.py`
-	 Rule-based validation service.
-
-4. `reflection.py`
-	 Reflection service that rewrites extraction instructions after validation failure.
-
-5. `api_run.py`
-	 Interactive runner for calling extraction, validation, reflection, or combined flows.
-
-6. `agentic_loop.py`
-	 Image-only extraction + validation retry loop.
-
-7. `agentic_loop_with_reflection.py`
-	 Image-only extraction + validation + reflection retry loop.
-
-8. `payload.json`
-	 Extraction input payload.
-
-9. `validation_payload.json`
-	 Validation rules and optional standalone validation data.
-
-10. `reflection_payload.json`
-		Standalone reflection request payload.
-
-11. `dummy_invoice.png`
-		Sample invoice image used by extraction and agentic loops.
-
-12. `natural_language_parser.py`
-	CLI helper that converts natural language extraction requests into the same payload schema used by `payload.json`.
-
-Example `.env`:
+**1. Add your API key to `.env`:**
 
 ```env
 GOOGLE_API_KEY=your_api_key_here
@@ -85,337 +44,126 @@ GEMINI_MODEL=gemini-2.5-flash
 
 Either `GOOGLE_API_KEY` or `GENAI_API_KEY` is accepted.
 
-## Install Dependencies
-
-If you are using `uv`:
+**2. Install dependencies:**
 
 ```bash
 uv sync
 ```
-## Example Workflow
 
-1. Put your Gemini API key in `.env`
-2. Start API:
+**3. Start the API:**
 
 ```bash
 uv run main.py
 ```
 
-3. Run direct service tests:
+API runs at `http://127.0.0.1:8000`. Swagger UI at `http://127.0.0.1:8000/docs`.
+
+## API endpoints
+
+### `POST /extract`
+Extract structured fields from raw text.
+
+```json
+{
+  "document_text": "Invoice INV-001 ...",
+  "instructions": "Extract the requested fields accurately.",
+  "fields": [
+    { "name": "invoice_number", "type": "string", "required": true, "description": "Invoice ID" }
+  ]
+}
+```
+
+### `POST /extract-image`
+Extract structured fields from an image file.
+
+```json
+{
+  "image_filename": "dummy_invoice.png",
+  "instructions": "Extract invoice details accurately.",
+  "fields": [
+    { "name": "invoice_number", "type": "string", "required": true, "description": "Invoice ID or number" }
+  ]
+}
+```
+
+Supported field types: `string`, `integer`, `float`, `boolean`, `list[string]`, `list[integer]`, `list[float]`, `list[boolean]`
+
+### `POST /validate`
+Validate extracted data against a set of rules.
+
+```json
+{
+  "data": { "currency": "USD", "invoice_date": "2026-03-25", "total_amount": 120.5 },
+  "rules": [
+    { "field_name": "currency", "rule_type": "enum", "criteria": ["USD", "EUR", "SGD"] }
+  ]
+}
+```
+
+Supported rule types: `enum`, `regex`, `range`, `date`, `type_check`
+
+### `POST /reflect`
+Rewrite extraction instructions after a validation failure.
+
+```json
+{
+  "fields": [...],
+  "previous_extraction": {...},
+  "validation_feedback": "invoice_date format is inconsistent.",
+  "attempt_history": [],
+  "current_instructions": "Extract the requested data accurately from the document."
+}
+```
+
+> Reflection rewrites instructions only — it does not change field names or types.
+
+## Running locally
+
+### Interactive runner
 
 ```bash
+uv run main.py # to start the server 
 uv run api_run.py
 ```
 
-4. Run agentic loop without reflection:
+Available modes: `extraction`, `validation`, `both`, `reflect`, `all`
+
+When running extraction, choose between loading `payload.json` or entering a natural language request (parsed automatically into the correct schema).
+
+`all` runs extraction → validation → reflection in sequence.
+
+### Agentic loop (without reflection)
 
 ```bash
 uv run agentic_loop.py
 ```
 
-5. Run agentic loop with reflection:
+Flow: extract → validate → rewrite instructions locally → retry until success or max attempts.
+
+### Agentic loop (with reflection)
 
 ```bash
 uv run agentic_loop_with_reflection.py
 ```
 
+Flow: extract → validate → call `/reflect` → retry with reflected instructions → repeat until success or max attempts.
 
-## Run The API
+## Troubleshooting
 
-Start the unified FastAPI service:
+**`500` error on extraction**
+Usually a Gemini quota issue (`429 RESOURCE_EXHAUSTED`). Wait for quota reset, switch API key, or reduce retry frequency during testing.
 
-```bash
-uv run main.py
-```
-
-Health endpoint:
-
-```bash
-curl http://127.0.0.1:8000/
-```
-
-Swagger UI:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-## API Endpoints
-
-### 1. `POST /extract`
-
-Extracts structured data from raw text.
-
-Request shape:
-
-```json
-{
-	"document_text": "Invoice INV-001 ...",
-	"instructions": "Extract the requested fields accurately.",
-	"fields": [
-		{
-			"name": "invoice_number",
-			"type": "string",
-			"required": true,
-			"description": "Invoice ID"
-		}
-	]
-}
-```
-
-### 2. `POST /extract-image`
-
-Extracts structured data from an image file in the repo.
-
-Request shape:
-
-```json
-{
-	"image_filename": "dummy_invoice.png",
-	"instructions": "Extract invoice details accurately.",
-	"fields": [
-		{
-			"name": "invoice_number",
-			"type": "string",
-			"required": true,
-			"description": "Invoice ID or number"
-		}
-	]
-}
-```
-
-Supported field types:
-
-1. `string`
-2. `integer`
-3. `float`
-4. `boolean`
-5. `list[string]`
-6. `list[integer]`
-7. `list[float]`
-8. `list[boolean]`
-
-Example:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/extract-image" \
-	-H "Content-Type: application/json" \
-	--data @payload.json
-```
-
-### 3. `POST /validate`
-
-Validates extracted data using rule objects.
-
-Request shape:
-
-```json
-{
-	"data": {
-		"currency": "USD",
-		"invoice_date": "2026-03-25",
-		"total_amount": 120.5
-	},
-	"rules": [
-		{
-			"field_name": "currency",
-			"rule_type": "enum",
-			"criteria": ["USD", "EUR", "SGD"]
-		}
-	]
-}
-```
-
-Supported rule types:
-
-1. `enum`
-2. `regex`
-3. `range`
-4. `date`
-5. `type_check`
-
-Example:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/validate" \
-	-H "Content-Type: application/json" \
-	--data @validation_payload.json
-```
-
-### 4. `POST /reflect`
-
-Uses Gemini to rewrite extraction instructions after validation failure.
-
-Request shape:
-
-```json
-{
-	"fields": [...],
-	"previous_extraction": {...},
-	"validation_feedback": "invoice_date format is inconsistent.",
-	"attempt_history": [],
-	"current_instructions": "Extract the requested data accurately from the document."
-}
-```
-
-Example:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/reflect" \
-	-H "Content-Type: application/json" \
-	--data @reflection_payload.json
-```
-
-## Payload Files
-
-### `payload.json`
-
-Defines the extraction request used by local runners.
-
-Includes:
-
-1. `image_filename`
-2. `instructions`
-3. `fields`
-
-### `validation_payload.json`
-
-Defines validation rules.
-
-Includes:
-
-1. `rules`
-2. optional `data` for standalone validation-only runs
-
-When running agentic loops, the `data` section is ignored and replaced with live extraction output.
-
-### `reflection_payload.json`
-
-Defines a standalone reflection request for testing `/reflect` directly.
-
-## Local Runner
-
-Use the interactive runner:
-
-```bash
-uv run api_run.py
-```
-
-When extraction is selected, `api_run.py` now gives two input options:
-
-1. Use the existing `payload.json` file
-2. Enter a natural language extraction request, which is parsed by `natural_language_parser.py` into the same payload schema used by `payload.json`
-
-Available modes:
-
-1. extraction
-2. validation
-3. both
-4. reflect
-5. all
-
-`all` runs:
-
-1. extraction
-2. validation
-3. reflection
-
-## Agentic Workflows
-
-### `agentic_loop.py`
-
-Runs an extraction + validation loop.
-
-Flow:
-
-1. call `/extract-image`
-2. call `/validate`
-3. if invalid, rewrite instructions locally
-4. retry until success or max attempts
-
-Run it:
-
-```bash
-uv run agentic_loop.py
-```
-
-### `agentic_loop_with_reflection.py`
-
-Runs extraction + validation + reflection.
-
-Flow:
-
-1. call `/extract-image`
-2. call `/validate`
-3. if invalid, call `/reflect`
-4. use reflected instructions for next extraction attempt
-5. retry until success or max attempts
-
-Run it:
-
-```bash
-uv run agentic_loop_with_reflection.py
-```
-
-## Gemini Usage
-
-Gemini is currently used in:
-
-1. `extraction_service.py`
-2. `reflection.py`
-
-Default model:
-
-```text
-gemini-2.5-flash
-```
-
-You can override it with:
-
-```env
-GEMINI_MODEL=gemini-2.5-flash
-```
-
-## Common Issues
-
-### 1. `500 Internal Server Error` on extraction
-
-Often this is an upstream Gemini quota or rate-limit issue.
-
-Typical underlying cause:
-
-1. `429 RESOURCE_EXHAUSTED`
-
-What to do:
-
-1. wait for quota reset
-2. switch API key/project
-3. enable billing or higher quota
-4. reduce repeated retries during testing
-
-### 2. `.env` still gets pushed even though it is in `.gitignore`
-
-That means `.env` was already tracked before the ignore rule applied.
-
-Fix:
+**`.env` pushed to git despite `.gitignore`**
+The file was tracked before the ignore rule was added. Fix with:
 
 ```bash
 git rm --cached .env
-git commit -m "Stop tracking .env"
+git commit -m "stop tracking .env"
 git push
 ```
 
-If secrets were ever pushed, rotate them.
+If secrets were ever pushed, rotate them immediately.
 
+## Roadmap
 
-
-
-## Notes
-
-1. The service is named `document-processing` in the health endpoint because extraction, validation, and reflection are deployed under one FastAPI app.
-2. `dummy_invoice.png` is the sample image used by extraction and agentic loop demos.
-3. Reflection does not change field names or types. It only rewrites extraction instructions.
-
-
-## TODO:
-To add LLM-as-Judge as evaluation methods
+- [ ] Add LLM-as-Judge evaluation
