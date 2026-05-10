@@ -21,24 +21,21 @@ def _create_llm() -> ChatGoogleGenerativeAI:
 	)
 
 
-def parse_natural_language_to_payload(natural_language_prompt: str) -> Dict[str, Any]:
+def parse_natural_language_to_payload(natural_language_prompt: str, service_type: str = "extraction") -> Dict[str, Any]:
 	"""
-	Convert natural language into a payload.json-compatible structure.
+	Convert natural language into a payload structure for different services.
 
 	Args:
-		natural_language_prompt: A natural language description of what fields to extract
+		natural_language_prompt: A natural language description
+		service_type: "extraction", "validation", or "doc_type_check"
 
 	Returns:
-		A dictionary with structure matching payload.json:
-		{
-			"image_filename": "dummy_invoice.png",
-			"instructions": "...",
-			"fields": [...]
-		}
+		A dictionary with structure matching the service type.
 	"""
 	llm = _create_llm()
 
-	system_prompt = """You are an expert at converting natural language descriptions into structured extraction configs.
+	if service_type == "extraction":
+		system_prompt = """You are an expert at converting natural language descriptions into structured extraction configs.
 Given a natural language prompt describing what fields to extract from an image, output a valid JSON object with this exact structure:
 
 {
@@ -72,11 +69,81 @@ Rules:
 5. Generate meaningful extraction instructions based on the prompt
 6. Return ONLY valid JSON, no markdown, no explanations"""
 
-	user_message = f"""Convert this natural language prompt into a structured extraction config:
+		user_message = f"""Convert this natural language prompt into a structured extraction config:
 
 {natural_language_prompt}
 
 Output only the JSON object, nothing else."""
+
+	elif service_type == "validation":
+		system_prompt = """You are an expert at converting natural language descriptions into structured validation configs.
+Given a natural language prompt describing validation rules for data fields, output a valid JSON object with this exact structure:
+
+{
+  "data": {},
+  "rules": [
+    {
+      "field_name": "field_name",
+      "rule_type": "enum|regex|range|date|type_check",
+      "criteria": "criteria_value" or {"min": 0, "max": 100} for range
+    }
+  ]
+}
+
+Supported rule types:
+- enum: criteria is array of allowed values, e.g. ["USD", "EUR"]
+- regex: criteria is regex pattern string
+- range: criteria is {"min": number, "max": number}
+- date: criteria is empty string ""
+- type_check: criteria is empty string ""
+
+Rules:
+1. Infer field names from the prompt
+2. Choose appropriate rule_type based on the validation description
+3. For range, provide min and max as numbers
+4. For enum, provide array of strings
+5. Leave data empty as {}
+6. Return ONLY valid JSON, no markdown, no explanations"""
+
+		user_message = f"""Convert this natural language prompt into a structured validation config:
+
+{natural_language_prompt}
+
+Output only the JSON object, nothing else."""
+
+	elif service_type == "doc_type_check":
+		system_prompt = """You are an expert at converting natural language descriptions into structured document type check configs.
+Given a natural language prompt describing what document types to check, output a valid JSON object with this exact structure:
+
+{
+  "image_filename": "dummy_invoice.png",
+  "instructions": "A clear instruction for determining the document type",
+  "fields": [
+    {
+      "name": "document_type",
+      "type": "string",
+      "required": true,
+      "description": "Type of document, e.g., invoice, receipt, contract"
+    }
+  ]
+}
+
+Rules:
+1. Always include document_type field
+2. Use "string" type
+3. Mark as required=true
+4. Always use "dummy_invoice.png" as the image_filename
+5. Generate meaningful instructions based on the prompt
+6. Return ONLY valid JSON, no markdown, no explanations"""
+
+		user_message = f"""Convert this natural language prompt into a structured document type check config:
+
+{natural_language_prompt}
+
+Output only the JSON object, nothing else."""
+
+	else:
+		raise ValueError(f"Unsupported service_type: {service_type}")
 
 	messages = [
 		SystemMessage(content=system_prompt),
@@ -99,13 +166,18 @@ Output only the JSON object, nothing else."""
 	# Parse and validate JSON
 	payload = json.loads(result_text)
 
-	# Ensure all required keys are present
-	if "image_filename" not in payload:
-		payload["image_filename"] = "dummy_invoice.png"
-	if "instructions" not in payload:
-		payload["instructions"] = "Extract the requested fields accurately."
-	if "fields" not in payload or not isinstance(payload["fields"], list):
-		raise ValueError("Response must contain a 'fields' array")
+	if service_type in ("extraction", "doc_type_check"):
+		if "image_filename" not in payload:
+			payload["image_filename"] = "dummy_invoice.png"
+		if "instructions" not in payload:
+			payload["instructions"] = "Extract the requested fields accurately."
+		if "fields" not in payload or not isinstance(payload["fields"], list):
+			raise ValueError("Response must contain a 'fields' array")
+	elif service_type == "validation":
+		if "data" not in payload:
+			payload["data"] = {}
+		if "rules" not in payload or not isinstance(payload["rules"], list):
+			raise ValueError("Validation response must contain a 'rules' array")
 
 	return payload
 
