@@ -25,6 +25,7 @@ async def universal_agent_loop(
     reflect_url = f"{base_url.rstrip('/')}/reflect"  # NEW
 
     attempt_history = []  # NEW (optional but recommended)
+    logs = []
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         for attempt in range(1, max_attempts + 1):
@@ -35,8 +36,8 @@ async def universal_agent_loop(
                 "instructions": current_instructions,
             }
 
-            print(f"Attempt {attempt}: Sending extraction request")
-            print(f"Instructions:\n{current_instructions}\n")
+            logs.append(f"Attempt {attempt}: Sending extraction request")
+            logs.append(f"Instructions:\n{current_instructions}")
 
             extract_res = await client.post(extract_url, json=extraction_payload)
             extract_res.raise_for_status()
@@ -44,7 +45,7 @@ async def universal_agent_loop(
             extract_out = extract_res.json()
             extracted_data = extract_out.get("extracted_data", {})
 
-            print(f"Extracted data: {json.dumps(extracted_data, indent=2)}")
+            logs.append(f"Extracted data: {json.dumps(extracted_data, indent=2)}")
 
             # Validation
             validation_payload = {
@@ -67,13 +68,14 @@ async def universal_agent_loop(
                     "mode": "image",
                     "extracted_data": extracted_data,
                     "validation": validation_out,
+                    "logs": logs,
                 }
 
             # Failure
             last_feedback = str(feedback)
 
-            print(f"Attempt {attempt} failed validation:")
-            print(last_feedback)
+            logs.append(f"Attempt {attempt} failed validation:")
+            logs.append(last_feedback)
 
             # Save history (NEW)
             attempt_history.append({
@@ -94,7 +96,7 @@ async def universal_agent_loop(
                 "current_instructions": current_instructions,
             }
 
-            print("Calling reflection agent...\n")
+            logs.append("Calling reflection agent...")
 
             reflect_res = await client.post(reflect_url, json=reflection_payload)
             reflect_res.raise_for_status()
@@ -104,9 +106,8 @@ async def universal_agent_loop(
             if isinstance(updated, str) and updated.strip():
                 current_instructions = updated
 
-            print("Updated Instructions:")
-            print(current_instructions)
-            print("\n" + "-" * 60 + "\n")
+            logs.append(f"Updated Instructions:\n{current_instructions}")
+            logs.append("-" * 60)
 
     return {
         "status": "invalid",
@@ -114,6 +115,7 @@ async def universal_agent_loop(
         "mode": "image",
         "feedback": last_feedback,
         "extracted_data": {},
+        "logs": logs,
     }
 
 

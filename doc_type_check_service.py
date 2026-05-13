@@ -12,7 +12,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
 
-router = APIRouter(tags=["extraction"])
+router = APIRouter(tags=["doc_type_check"])
 
 
 SUPPORTED_TYPES = {
@@ -49,42 +49,33 @@ class ExtractionField(BaseModel):
 	)
 
 
-class ExtractionRequest(BaseModel):
-	document_text: str = Field(min_length=1, description="Document content to parse")
+class DocTypeCheckPayload(BaseModel):
 	fields: List[ExtractionField] = Field(min_length=1)
 	instructions: Optional[str] = Field(
 		default=None,
-		description="Optional extraction instructions",
-	)
-
-
-class ExtractionResponse(BaseModel):
-	model_config = ConfigDict(extra="forbid")
-
-	model: str
-	extracted_data: Dict[str, Any]
-
-
-class ImageExtractionPayload(BaseModel):
-	fields: List[ExtractionField] = Field(min_length=1)
-	instructions: Optional[str] = Field(
-		default=None,
-		description="Optional extraction instructions",
+		description="Optional check instructions",
 	)
 	image_filename: str = Field(default="dummy_invoice.png")
 
 
-class ImageExtractionRequest(BaseModel):
+class DocTypeCheckRequest(BaseModel):
 	fields: Optional[List[ExtractionField]] = Field(default=None)
 	instructions: Optional[str] = Field(
 		default=None,
-		description="Optional extraction instructions",
+		description="Optional check instructions",
 	)
 	image_filename: Optional[str] = Field(default=None)
-	payload: Optional[ImageExtractionPayload] = Field(
+	payload: Optional[DocTypeCheckPayload] = Field(
 		default=None,
 		description="Optional nested payload schema from parser output",
 	)
+
+
+class DocTypeCheckResponse(BaseModel):
+	model_config = ConfigDict(extra="forbid")
+
+	model: str
+	document_type: str
 
 
 def _build_dynamic_schema(fields: List[ExtractionField]) -> Type[BaseModel]:
@@ -103,7 +94,7 @@ def _build_dynamic_schema(fields: List[ExtractionField]) -> Type[BaseModel]:
 				Field(default=None, description=field.description or f"Extract {field.name}"),
 			)
 
-	return create_model("ExtractionOutput", **model_fields)
+	return create_model("DocTypeCheckOutput", **model_fields)
 
 
 def _create_llm() -> ChatGoogleGenerativeAI:
@@ -130,63 +121,28 @@ def _invoke_with_retry(structured_llm: Any, messages: List[Any]) -> Any:
 			time.sleep(sleep_time)
 
 
-@router.post("/extract", response_model=ExtractionResponse)
-def extract_information(payload: ExtractionRequest) -> ExtractionResponse:
-	try:
-		output_schema = _build_dynamic_schema(payload.fields)
-		llm = _create_llm()
-		structured_llm = llm.with_structured_output(output_schema)
-
-		schema_lines = [
-			f"- {field.name} ({field.type}) required={field.required}: {field.description}"
-			for field in payload.fields
-		]
-
-		instructions = payload.instructions or "Return only values grounded in the document."
-		messages = [
-			SystemMessage(
-				content=(
-					"You are an extraction engine. Extract only requested fields and obey types exactly. "
-					"If optional values are missing, return null."
-				)
-			),
-			HumanMessage(
-				content=(
-					"Extract the following fields from the document.\n\n"
-					f"Instructions:\n{instructions}\n\n"
-					"Fields:\n"
-					+ "\n".join(schema_lines)
-					+ "\n\nDocument:\n"
-					+ payload.document_text
-				)
-			),
-		]
-
-		extracted = _invoke_with_retry(structured_llm, messages)
-		return ExtractionResponse(
-			model=llm.model,
-			extracted_data=extracted.model_dump(),
-		)
-	except ValueError as exc:
-		raise HTTPException(status_code=400, detail=str(exc)) from exc
-	except Exception as exc:
-		raise HTTPException(status_code=500, detail=f"Extraction failed: {exc}") from exc
-
-
-@router.post("/extract-image", response_model=ExtractionResponse)
-def extract_information_from_image(payload: ImageExtractionRequest) -> ExtractionResponse:
+@router.post("/check-doc-type", response_model=DocTypeCheckResponse)
+def check_document_type(payload: DocTypeCheckRequest) -> DocTypeCheckResponse:
 	try:
 		if payload.payload is not None:
 			use_payload = payload.payload
 		else:
-			use_payload = ImageExtractionPayload(
+			use_payload = DocTypeCheckPayload(
 				fields=payload.fields or [],
 				instructions=payload.instructions,
 				image_filename=payload.image_filename or "dummy_invoice.png",
 			)
 
 		if not use_payload.fields:
-			raise HTTPException(status_code=400, detail="Payload must include 'fields' to extract.")
+			# Default field for document type
+			use_payload.fields = [
+				ExtractionField(
+					name="document_type",
+					type="string",
+					required=True,
+					description="Type of document, e.g., invoice, receipt, contract"
+				)
+			]
 
 		image_path = Path(__file__).parent / (use_payload.image_filename or "dummy_invoice.png")
 		if not image_path.exists():
@@ -201,14 +157,14 @@ def extract_information_from_image(payload: ImageExtractionRequest) -> Extractio
 			for field in use_payload.fields
 		]
 
-		instructions = use_payload.instructions or "Extract values grounded in the invoice image only."
+		instructions = use_payload.instructions or "Determine the type of document from the image."
 		image_b64 = b64encode(image_path.read_bytes()).decode("utf-8")
 
 		messages = [
 			SystemMessage(
 				content=(
-					"You are an extraction engine. Extract only requested fields and obey types exactly. "
-					"If optional values are missing, return null."
+					"You are a document type checker. Determine the document type from the image. "
+					"Return only the requested fields."
 				)
 			),
 			HumanMessage(
@@ -216,7 +172,7 @@ def extract_information_from_image(payload: ImageExtractionRequest) -> Extractio
 					{
 						"type": "text",
 						"text": (
-							"Extract the following fields from the invoice image.\n\n"
+							"Determine the document type from the image.\n\n"
 							f"Instructions:\n{instructions}\n\n"
 							"Fields:\n"
 							+ "\n".join(schema_lines)
@@ -231,30 +187,43 @@ def extract_information_from_image(payload: ImageExtractionRequest) -> Extractio
 		]
 
 		extracted = _invoke_with_retry(structured_llm, messages)
-		return ExtractionResponse(
+		extracted_data = extracted.model_dump()
+		document_type = extracted_data.get("document_type", "unknown")
+
+		return DocTypeCheckResponse(
 			model=llm.model,
-			extracted_data=extracted.model_dump(),
+			document_type=document_type,
 		)
 	except HTTPException:
 		raise
 	except ValueError as exc:
 		raise HTTPException(status_code=400, detail=str(exc)) from exc
 	except Exception as exc:
-		raise HTTPException(status_code=500, detail=f"Image extraction failed: {exc}") from exc
+		raise HTTPException(status_code=500, detail=f"Document type check failed: {exc}") from exc
 
 
-@router.post("/extract-upload", response_model=ExtractionResponse)
-def extract_information_from_upload(
+@router.post("/check-doc-type-upload", response_model=DocTypeCheckResponse)
+def check_document_type_upload(
 	file: UploadFile = File(...),
-	fields: str = Form(..., description="JSON string of fields to extract"),
+	fields: Optional[str] = Form(None, description="JSON string of fields"),
 	instructions: Optional[str] = Form(None)
-) -> ExtractionResponse:
+) -> DocTypeCheckResponse:
 	try:
-		import json
-		parsed_fields = [ExtractionField(**f) for f in json.loads(fields)]
+		# Parse fields if provided
+		parsed_fields = []
+		if fields:
+			import json
+			parsed_fields = [ExtractionField(**f) for f in json.loads(fields)]
 
 		if not parsed_fields:
-			raise HTTPException(status_code=400, detail="Fields must be provided.")
+			parsed_fields = [
+				ExtractionField(
+					name="document_type",
+					type="string",
+					required=True,
+					description="Type of document, e.g., invoice, receipt, contract"
+				)
+			]
 
 		# Read file content
 		file_content = file.file.read()
@@ -269,12 +238,12 @@ def extract_information_from_upload(
 			for field in parsed_fields
 		]
 
-		instr = instructions or "Extract values grounded in the uploaded image only."
+		instr = instructions or "Determine the type of document from the uploaded file."
 		messages = [
 			SystemMessage(
 				content=(
-					"You are an extraction engine. Extract only requested fields and obey types exactly. "
-					"If optional values are missing, return null."
+					"You are a document type checker. Determine the document type from the file. "
+					"Return only the requested fields."
 				)
 			),
 			HumanMessage(
@@ -282,7 +251,7 @@ def extract_information_from_upload(
 					{
 						"type": "text",
 						"text": (
-							"Extract the following fields from the uploaded image.\n\n"
+							"Determine the document type from the uploaded file.\n\n"
 							f"Instructions:\n{instr}\n\n"
 							"Fields:\n"
 							+ "\n".join(schema_lines)
@@ -297,13 +266,16 @@ def extract_information_from_upload(
 		]
 
 		extracted = _invoke_with_retry(structured_llm, messages)
-		return ExtractionResponse(
+		extracted_data = extracted.model_dump()
+		document_type = extracted_data.get("document_type", "unknown")
+
+		return DocTypeCheckResponse(
 			model=llm.model,
-			extracted_data=extracted.model_dump(),
+			document_type=document_type,
 		)
 	except HTTPException:
 		raise
 	except ValueError as exc:
 		raise HTTPException(status_code=400, detail=str(exc)) from exc
 	except Exception as exc:
-		raise HTTPException(status_code=500, detail=f"Image extraction failed: {exc}") from exc
+		raise HTTPException(status_code=500, detail=f"Document type check failed: {exc}") from exc

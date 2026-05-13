@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from extraction_service import router as extraction_router
 from reflection import router as reflection_router
 from validation_service import router as validation_router
+from doc_type_check_service import router as doc_type_check_router
 
 
 app = FastAPI(
@@ -14,6 +15,7 @@ app = FastAPI(
 app.include_router(extraction_router)
 app.include_router(reflection_router)
 app.include_router(validation_router)
+app.include_router(doc_type_check_router)
 
 
 @app.get("/")

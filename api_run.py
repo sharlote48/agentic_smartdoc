@@ -19,7 +19,8 @@ def _select_mode() -> str:
 	print("3) both")
 	print("4) reflect")
 	print("5) all (extraction -> validation -> reflect)")
-	choice = input("Enter 1, 2, 3, 4, or 5: ").strip().lower()
+	print("6) doc_type_check")
+	choice = input("Enter 1-6 or name: ").strip().lower()
 
 	mapping = {
 		"1": "extraction",
@@ -27,15 +28,17 @@ def _select_mode() -> str:
 		"3": "both",
 		"4": "reflect",
 		"5": "all",
+		"6": "doc_type_check",
 		"extraction": "extraction",
 		"validation": "validation",
 		"both": "both",
 		"reflect": "reflect",
 		"all": "all",
+		"doc_type_check": "doc_type_check",
 	}
 
 	if choice not in mapping:
-		raise ValueError("Invalid choice. Use 1/2/3/4/5 or extraction/validation/both/reflect/all.")
+		raise ValueError("Invalid choice. Use 1-6 or name.")
 
 	return mapping[choice]
 
@@ -89,6 +92,7 @@ def main() -> None:
 
 	extraction_payload = None
 	validation_payload = None
+	doc_type_payload = None
 
 	if mode in ("extraction", "both", "all"):
 		input_source = _select_extraction_input_source()
@@ -99,6 +103,15 @@ def main() -> None:
 				extraction_payload = json.load(extraction_payload_file)
 		else:
 			extraction_payload = _prompt_natural_language_payload()
+
+	if mode == "doc_type_check":
+		print("Enter a natural language description for document type check.")
+		print("For example: Check if this is an invoice or receipt.")
+		nl_prompt = input("Natural language request: ").strip()
+		if not nl_prompt:
+			nl_prompt = "Determine the document type."
+		print("Parsing request into doc type check payload...")
+		doc_type_payload = parse_natural_language_to_payload(nl_prompt, "doc_type_check")
 
 	if mode in ("validation", "both", "all"):
 		if not VALIDATION_PAYLOAD_PATH.exists():
@@ -132,6 +145,19 @@ def main() -> None:
 			extract_response.raise_for_status()
 		extract_output = extract_response.json()
 		extracted_data = extract_output.get("extracted_data", {})
+
+	if mode == "doc_type_check":
+		if doc_type_payload is None:
+			doc_type_payload = _prompt_natural_language_payload()  # or default
+		doc_type_response = requests.post(
+			f"{BASE_URL}/check-doc-type",
+			json=doc_type_payload,
+			timeout=120,
+		)
+		print("Doc Type Check Status:", doc_type_response.status_code)
+		print(doc_type_response.text)
+		if not doc_type_response.ok:
+			doc_type_response.raise_for_status()
 
 	validation_output: Dict[str, Any] = {}
 	if mode in ("validation", "both", "all"):
