@@ -906,18 +906,39 @@ function withFilename(schemas) {
 
 el('runBtn').addEventListener('click', async () => {
   setStatus('runStatus', 'Running services…', 'info');
-  el('runResponse').textContent = '';
+
+  const progressMessages = [
+    'Starting API call...',
+    'Attempt 1: sending extraction request...',
+    'Attempt 1: waiting for extraction response...',
+    'Attempt 1: validating extracted data...',
+    'Attempt 1: running reflection agent...',
+    'Attempt 2: sending extraction request...',
+    'Attempt 2: waiting for extraction response...',
+    'Attempt 2: validating extracted data...',
+    'Attempt 2: running reflection agent...',
+    'Finalising results...',
+  ];
+  let msgIdx = 0;
+  el('runResponse').textContent = progressMessages[0];
+  const ticker = setInterval(() => {
+    msgIdx = Math.min(msgIdx + 1, progressMessages.length - 1);
+    el('runResponse').textContent = progressMessages[msgIdx];
+  }, 2500);
+
   try {
     const res = await fetch('/call-api', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pipeline: selected.pipeline, schemas: withFilename(confirmedSchemas) }),
     });
+    clearInterval(ticker);
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'API call failed');
     el('runResponse').textContent = JSON.stringify(data, null, 2);
     setStatus('runStatus', 'Done ✓', 'ok');
   } catch (err) {
+    clearInterval(ticker);
     setStatus('runStatus', 'Error: ' + err.message, 'err');
     el('runResponse').textContent = err.message;
   }
