@@ -10,6 +10,7 @@ dependencies = [
     "fastapi>=0.116.1",
     "google-genai>=1.68.0",
     "httpx>=0.28.1",
+    "langchain-anthropic>=0.3.0",
     "langchain-google-genai>=4.2.1",
     "langchain-google-vertexai>=3.2.2",
     "langchain[google-genai]>=1.2.13",

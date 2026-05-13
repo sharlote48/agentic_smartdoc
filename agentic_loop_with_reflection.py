@@ -69,6 +69,7 @@ async def universal_agent_loop(
                     "extracted_data": extracted_data,
                     "validation": validation_out,
                     "logs": logs,
+                    "final_schema": extraction_payload,
                 }
 
             # Failure
@@ -116,6 +117,7 @@ async def universal_agent_loop(
         "feedback": last_feedback,
         "extracted_data": {},
         "logs": logs,
+        "final_schema": current_instructions,
     }
 
 

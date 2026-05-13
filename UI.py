@@ -193,7 +193,7 @@ def call_api(request: CallAPIRequest):
                         validation_rules=validation_schema.get("rules", []),
                         image_filename=extraction_payload.get("image_filename", "dummy_invoice.png"),
                         base_url=BASE_API_URL,
-                        max_attempts=2,
+                        max_attempts=3,
                     )
                 )
                 loop.close()
@@ -620,6 +620,7 @@ def extraction_ui() -> HTMLResponse:
       <div class="tab-row">
         <button class="tab-btn active" id="tabPre">Predefined Schema</button>
         <button class="tab-btn" id="tabNL">Natural Language</button>
+        <button class="tab-btn" id="tabManual">Manual Input</button>
       </div>
 
       <div id="preSection">
@@ -631,6 +632,13 @@ def extraction_ui() -> HTMLResponse:
         <label for="nlInput">Describe what to process</label>
         <textarea id="nlInput" placeholder="e.g. Extract invoice number, vendor name, total amount. Validate that currency is USD or EUR and total_amount is between 0 and 10000."></textarea>
         <button class="btn btn-outline" id="parseBtn">Parse to Schema</button>
+      </div>
+
+      <div id="manualSection" style="display:none">
+        <label for="manualInput">Paste your schema JSON</label>
+        <p class="hint">Paste a schema object directly, e.g. <code>{"extraction": {...}}</code> or <code>{"validation": {...}}</code>.</p>
+        <textarea id="manualInput" style="min-height:160px;font-family:ui-monospace,'Cascadia Code',monospace;font-size:0.78rem;line-height:1.5;" placeholder='{"extraction": {"image_filename": "dummy_invoice.png", "fields": [...]}}'></textarea>
+        <button class="btn btn-outline" id="loadManualBtn">Load Schema</button>
       </div>
 
       <div class="status info" id="schemaStatus"></div>
@@ -657,6 +665,13 @@ def extraction_ui() -> HTMLResponse:
       <div class="response-wrap">
         <label>Response</label>
         <div class="response-box" id="runResponse">Results will appear here.</div>
+      </div>
+
+      <div id="finalSchemaWrap" style="display:none;margin-top:16px">
+        <label style="margin-bottom:6px">Final Schema (instructions used on last attempt)</label>
+        <p class="hint">Copy and reuse these refined instructions for future extractions.</p>
+        <textarea id="finalSchemaBox" style="width:100%;min-height:120px;font-family:ui-monospace,'Cascadia Code',monospace;font-size:0.8rem;border:1px solid var(--border);border-radius:10px;padding:9px 11px;background:#fff;color:var(--ink);resize:vertical;" readonly></textarea>
+        <button class="btn btn-outline" id="copySchemaBtn" style="margin-top:4px">Copy to Clipboard</button>
       </div>
     </section>
 
@@ -795,29 +810,25 @@ function resetStep2() {
   el('schemaEditorWrap').style.display = 'none';
   el('schemaEdit').value = '';
   el('nlInput').value = '';
+  el('manualInput').value = '';
   el('chip2').style.display = 'none';
   el('num2').classList.remove('done');
   el('num2').textContent = '2';
 }
 
 // ─── Schema source tabs ────────────────────────────────────────────────────────
-el('tabPre').addEventListener('click', () => {
-  el('tabPre').classList.add('active');
-  el('tabNL').classList.remove('active');
-  el('preSection').style.display = '';
-  el('nlSection').style.display = 'none';
+function setActiveTab(activeId) {
+  ['tabPre', 'tabNL', 'tabManual'].forEach(id => el(id).classList.remove('active'));
+  ['preSection', 'nlSection', 'manualSection'].forEach(id => el(id).style.display = 'none');
+  el(activeId).classList.add('active');
+  el({ tabPre: 'preSection', tabNL: 'nlSection', tabManual: 'manualSection' }[activeId]).style.display = '';
   el('schemaEditorWrap').style.display = 'none';
   setStatus('schemaStatus', '', '');
-});
+}
 
-el('tabNL').addEventListener('click', () => {
-  el('tabNL').classList.add('active');
-  el('tabPre').classList.remove('active');
-  el('nlSection').style.display = '';
-  el('preSection').style.display = 'none';
-  el('schemaEditorWrap').style.display = 'none';
-  setStatus('schemaStatus', '', '');
-});
+el('tabPre').addEventListener('click', () => setActiveTab('tabPre'));
+el('tabNL').addEventListener('click', () => setActiveTab('tabNL'));
+el('tabManual').addEventListener('click', () => setActiveTab('tabManual'));
 
 // ─── Load predefined schema ────────────────────────────────────────────────────
 el('loadPreBtn').addEventListener('click', async () => {
@@ -862,6 +873,19 @@ function showSchemaEditor(schemas) {
   el('schemaEdit').value = JSON.stringify(schemas, null, 2);
   el('schemaEditorWrap').style.display = '';
 }
+
+// ─── Load manual schema ────────────────────────────────────────────────────────
+el('loadManualBtn').addEventListener('click', () => {
+  const raw = el('manualInput').value.trim();
+  if (!raw) { setStatus('schemaStatus', 'Paste a schema first.', 'err'); return; }
+  try {
+    const parsed = JSON.parse(raw);
+    showSchemaEditor(parsed);
+    setStatus('schemaStatus', 'Schema loaded. Review then confirm.', 'ok');
+  } catch {
+    setStatus('schemaStatus', 'Invalid JSON — check your input.', 'err');
+  }
+});
 
 // ─── Confirm schema ────────────────────────────────────────────────────────────
 el('confirmBtn').addEventListener('click', () => {
@@ -937,6 +961,13 @@ el('runBtn').addEventListener('click', async () => {
     if (!res.ok) throw new Error(data.detail || 'API call failed');
     el('runResponse').textContent = JSON.stringify(data, null, 2);
     setStatus('runStatus', 'Done ✓', 'ok');
+    const finalSchema = data?.reflection?.final_schema || data?.final_schema;
+    if (finalSchema) {
+      el('finalSchemaBox').value = finalSchema;
+      el('finalSchemaWrap').style.display = '';
+    } else {
+      el('finalSchemaWrap').style.display = 'none';
+    }
   } catch (err) {
     clearInterval(ticker);
     setStatus('runStatus', 'Error: ' + err.message, 'err');
@@ -1000,6 +1031,14 @@ async function sendFile(file) {
     setStatus('docStatus', 'Error: ' + err.message, 'err');
   }
 }
+
+// Copy final schema
+el('copySchemaBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(el('finalSchemaBox').value).then(() => {
+    el('copySchemaBtn').textContent = 'Copied ✓';
+    setTimeout(() => { el('copySchemaBtn').textContent = 'Copy to Clipboard'; }, 2000);
+  });
+});
 
 // File path method
 el('loadDocBtn').addEventListener('click', async () => {
