@@ -1,6 +1,6 @@
 # agentic_smartdoc
 
-Agentic document processing service built with FastAPI, LangChain, and Gemini.
+Agentic document processing service built with FastAPI, LangChain, and Gemini. Exposes extraction, validation, and reflection capabilities through a single unified API.
 
 This project exposes four API capabilities under one FastAPI app:
 
@@ -9,7 +9,8 @@ This project exposes four API capabilities under one FastAPI app:
 3. Reflection
 4. Doc Type Check
 
-The system is designed for invoice-like document workflows where an agent:
+**Agent 1 — Schema builder (pre-pipeline)**
+Runs once at integration setup. Converts a user's natural language description into a structured extraction payload. The generated schema is saved and reused across document runs.
 
 1. checks the document type
 2. extracts structured fields from an image
@@ -19,7 +20,7 @@ The system is designed for invoice-like document workflows where an agent:
 
 A browser-based UI (`UI.py`) provides a guided 3-step interface for configuring schemas (via natural language or predefined JSON), selecting pipelines, and running services end-to-end.
 
-## Overview
+<img width="1440" height="1040" alt="image" src="https://github.com/user-attachments/assets/544c6596-5c76-49ce-877f-ecee77159046" />
 
 The main API entrypoint is `main.py`. It mounts four routers into one service:
 
@@ -118,7 +119,7 @@ Key files:
 14. `dummy_invoice.png`
 	 Sample invoice image used by extraction and agentic loops.
 
-Example `.env`:
+**1. Add your API key to `.env`:**
 
 ```env
 GOOGLE_API_KEY=your_api_key_here
@@ -127,17 +128,13 @@ GEMINI_MODEL=gemini-2.5-flash
 
 Either `GOOGLE_API_KEY` or `GENAI_API_KEY` is accepted.
 
-## Install Dependencies
-
-If you are using `uv`:
+**2. Install dependencies:**
 
 ```bash
 uv sync
 ```
 
-## Run The API
-
-Start the unified FastAPI service:
+**3. Start the API:**
 
 ```bash
 uv run main.py
@@ -206,117 +203,60 @@ Both methods make the file available to the backend. The preview updates immedia
 
 ### 1. `POST /extract`
 
-Extracts structured data from raw text.
+## API endpoints
 
-Request shape:
+### `POST /extract`
+Extract structured fields from raw text.
 
 ```json
 {
-	"document_text": "Invoice INV-001 ...",
-	"instructions": "Extract the requested fields accurately.",
-	"fields": [
-		{
-			"name": "invoice_number",
-			"type": "string",
-			"required": true,
-			"description": "Invoice ID"
-		}
-	]
+  "document_text": "Invoice INV-001 ...",
+  "instructions": "Extract the requested fields accurately.",
+  "fields": [
+    { "name": "invoice_number", "type": "string", "required": true, "description": "Invoice ID" }
+  ]
 }
 ```
 
-### 2. `POST /extract-image`
-
-Extracts structured data from an image file in the repo.
-
-Request shape:
+### `POST /extract-image`
+Extract structured fields from an image file.
 
 ```json
 {
-	"image_filename": "dummy_invoice.png",
-	"instructions": "Extract invoice details accurately.",
-	"fields": [
-		{
-			"name": "invoice_number",
-			"type": "string",
-			"required": true,
-			"description": "Invoice ID or number"
-		}
-	]
+  "image_filename": "dummy_invoice.png",
+  "instructions": "Extract invoice details accurately.",
+  "fields": [
+    { "name": "invoice_number", "type": "string", "required": true, "description": "Invoice ID or number" }
+  ]
 }
 ```
 
-Supported field types:
+Supported field types: `string`, `integer`, `float`, `boolean`, `list[string]`, `list[integer]`, `list[float]`, `list[boolean]`
 
-1. `string`
-2. `integer`
-3. `float`
-4. `boolean`
-5. `list[string]`
-6. `list[integer]`
-7. `list[float]`
-8. `list[boolean]`
-
-Example:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/extract-image" \
-	-H "Content-Type: application/json" \
-	--data @payload.json
-```
-
-### 3. `POST /validate`
-
-Validates extracted data using rule objects.
-
-Request shape:
+### `POST /validate`
+Validate extracted data against a set of rules.
 
 ```json
 {
-	"data": {
-		"currency": "USD",
-		"invoice_date": "2026-03-25",
-		"total_amount": 120.5
-	},
-	"rules": [
-		{
-			"field_name": "currency",
-			"rule_type": "enum",
-			"criteria": ["USD", "EUR", "SGD"]
-		}
-	]
+  "data": { "currency": "USD", "invoice_date": "2026-03-25", "total_amount": 120.5 },
+  "rules": [
+    { "field_name": "currency", "rule_type": "enum", "criteria": ["USD", "EUR", "SGD"] }
+  ]
 }
 ```
 
-Supported rule types:
+Supported rule types: `enum`, `regex`, `range`, `date`, `type_check`
 
-1. `enum`
-2. `regex`
-3. `range`
-4. `date`
-5. `type_check`
-
-Example:
-
-```bash
-curl -X POST "http://127.0.0.1:8000/validate" \
-	-H "Content-Type: application/json" \
-	--data @validation_payload.json
-```
-
-### 4. `POST /reflect`
-
-Uses Gemini to rewrite extraction instructions after validation failure.
-
-Request shape:
+### `POST /reflect`
+Rewrite extraction instructions after a validation failure.
 
 ```json
 {
-	"fields": [...],
-	"previous_extraction": {...},
-	"validation_feedback": "invoice_date format is inconsistent.",
-	"attempt_history": [],
-	"current_instructions": "Extract the requested data accurately from the document."
+  "fields": [...],
+  "previous_extraction": {...},
+  "validation_feedback": "invoice_date format is inconsistent.",
+  "attempt_history": [],
+  "current_instructions": "Extract the requested data accurately from the document."
 }
 ```
 
@@ -391,17 +331,12 @@ Includes:
 1. `rules`
 2. optional `data` for standalone validation-only runs
 
-When running agentic loops, the `data` section is ignored and replaced with live extraction output.
+## Running locally
 
-### `reflection_payload.json`
-
-Defines a standalone reflection request for testing `/reflect` directly.
-
-## Local Runner
-
-Use the interactive runner:
+### Interactive runner
 
 ```bash
+uv run main.py # to start the server 
 uv run api_run.py
 ```
 
@@ -435,38 +370,19 @@ Used by the UI when the Natural Language schema source is selected, and availabl
 uv run natural_language_parser.py
 ```
 
-## Agentic Workflows
+When running extraction, choose between loading `payload.json` or entering a natural language request (parsed automatically into the correct schema).
 
-### `agentic_loop.py`
+`all` runs extraction → validation → reflection in sequence.
 
-Runs an extraction + validation loop.
-
-Flow:
-
-1. call `/extract-image`
-2. call `/validate`
-3. if invalid, rewrite instructions locally
-4. retry until success or max attempts
-
-Run it:
+### Agentic loop (without reflection)
 
 ```bash
 uv run agentic_loop.py
 ```
 
-### `agentic_loop_with_reflection.py`
+Flow: extract → validate → rewrite instructions locally → retry until success or max attempts.
 
-Runs extraction + validation + reflection.
-
-Flow:
-
-1. call `/extract-image`
-2. call `/validate`
-3. if invalid, call `/reflect`
-4. use reflected instructions for next extraction attempt
-5. retry until success or max attempts
-
-Run it:
+### Agentic loop (with reflection)
 
 ```bash
 uv run agentic_loop_with_reflection.py
@@ -507,20 +423,17 @@ Typical underlying cause:
 
 What to do:
 
-1. wait for quota reset
-2. switch API key/project
-3. enable billing or higher quota
-4. reduce repeated retries during testing
+## Troubleshooting
 
-### 2. `.env` still gets pushed even though it is in `.gitignore`
+**`500` error on extraction**
+Usually a Gemini quota issue (`429 RESOURCE_EXHAUSTED`). Wait for quota reset, switch API key, or reduce retry frequency during testing.
 
-That means `.env` was already tracked before the ignore rule applied.
-
-Fix:
+**`.env` pushed to git despite `.gitignore`**
+The file was tracked before the ignore rule was added. Fix with:
 
 ```bash
 git rm --cached .env
-git commit -m "Stop tracking .env"
+git commit -m "stop tracking .env"
 git push
 ```
 
