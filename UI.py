@@ -193,7 +193,7 @@ def call_api(request: CallAPIRequest):
                         validation_rules=validation_schema.get("rules", []),
                         image_filename=extraction_payload.get("image_filename", "dummy_invoice.png"),
                         base_url=BASE_API_URL,
-                        max_attempts=2,
+                        max_attempts=3,
                     )
                 )
                 loop.close()
@@ -533,6 +533,77 @@ def extraction_ui() -> HTMLResponse:
       max-height: 450px;
     }
 
+    /* Results table */
+    .results-section-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: var(--ink);
+    }
+    .results-summary {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .summary-chip {
+      background: rgba(0,95,115,0.08);
+      border: 1px solid rgba(0,95,115,0.2);
+      border-radius: 8px;
+      padding: 8px 14px;
+    }
+    .summary-chip-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+    .summary-chip-value { font-weight: 700; color: var(--accent); }
+    .status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 0.75rem;
+    }
+    .status-badge.valid { background: rgba(45,106,79,0.12); color: var(--success); }
+    .status-badge.invalid { background: rgba(155,34,38,0.12); color: var(--error); }
+    .validation-feedback {
+      background: rgba(155,34,38,0.07);
+      border: 1px solid rgba(155,34,38,0.2);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 0.83rem;
+      color: var(--error);
+    }
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .results-table th {
+      background: var(--accent);
+      color: white;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+    .results-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .results-table tr:last-child td { border-bottom: none; }
+    .results-table tr:nth-child(even) td { background: rgba(0,95,115,0.03); }
+    .results-table .field-name { font-weight: 600; color: var(--ink); white-space: nowrap; }
+
     @media (max-width: 860px) {
       .wrap { grid-template-columns: 1fr; }
     }
@@ -620,6 +691,7 @@ def extraction_ui() -> HTMLResponse:
       <div class="tab-row">
         <button class="tab-btn active" id="tabPre">Predefined Schema</button>
         <button class="tab-btn" id="tabNL">Natural Language</button>
+        <button class="tab-btn" id="tabManual">Manual Input</button>
       </div>
 
       <div id="preSection">
@@ -631,6 +703,13 @@ def extraction_ui() -> HTMLResponse:
         <label for="nlInput">Describe what to process</label>
         <textarea id="nlInput" placeholder="e.g. Extract invoice number, vendor name, total amount. Validate that currency is USD or EUR and total_amount is between 0 and 10000."></textarea>
         <button class="btn btn-outline" id="parseBtn">Parse to Schema</button>
+      </div>
+
+      <div id="manualSection" style="display:none">
+        <label for="manualInput">Paste your schema JSON</label>
+        <p class="hint">Paste a schema object directly, e.g. <code>{"extraction": {...}}</code> or <code>{"validation": {...}}</code>.</p>
+        <textarea id="manualInput" style="min-height:160px;font-family:ui-monospace,'Cascadia Code',monospace;font-size:0.78rem;line-height:1.5;" placeholder='{"extraction": {"image_filename": "dummy_invoice.png", "fields": [...]}}'></textarea>
+        <button class="btn btn-outline" id="loadManualBtn">Load Schema</button>
       </div>
 
       <div class="status info" id="schemaStatus"></div>
@@ -657,6 +736,18 @@ def extraction_ui() -> HTMLResponse:
       <div class="response-wrap">
         <label>Response</label>
         <div class="response-box" id="runResponse">Results will appear here.</div>
+      </div>
+
+      <div id="resultsTableWrap" style="display:none;margin-top:16px">
+        <p class="results-section-title">Extracted Results</p>
+        <div id="resultsTableContent"></div>
+      </div>
+
+      <div id="finalSchemaWrap" style="display:none;margin-top:16px">
+        <label style="margin-bottom:6px">Final Schema (instructions used on last attempt)</label>
+        <p class="hint">Copy and reuse these refined instructions for future extractions.</p>
+        <textarea id="finalSchemaBox" style="width:100%;min-height:120px;font-family:ui-monospace,'Cascadia Code',monospace;font-size:0.8rem;border:1px solid var(--border);border-radius:10px;padding:9px 11px;background:#fff;color:var(--ink);resize:vertical;" readonly></textarea>
+        <button class="btn btn-outline" id="copySchemaBtn" style="margin-top:4px">Copy to Clipboard</button>
       </div>
     </section>
 
@@ -795,29 +886,25 @@ function resetStep2() {
   el('schemaEditorWrap').style.display = 'none';
   el('schemaEdit').value = '';
   el('nlInput').value = '';
+  el('manualInput').value = '';
   el('chip2').style.display = 'none';
   el('num2').classList.remove('done');
   el('num2').textContent = '2';
 }
 
 // ─── Schema source tabs ────────────────────────────────────────────────────────
-el('tabPre').addEventListener('click', () => {
-  el('tabPre').classList.add('active');
-  el('tabNL').classList.remove('active');
-  el('preSection').style.display = '';
-  el('nlSection').style.display = 'none';
+function setActiveTab(activeId) {
+  ['tabPre', 'tabNL', 'tabManual'].forEach(id => el(id).classList.remove('active'));
+  ['preSection', 'nlSection', 'manualSection'].forEach(id => el(id).style.display = 'none');
+  el(activeId).classList.add('active');
+  el({ tabPre: 'preSection', tabNL: 'nlSection', tabManual: 'manualSection' }[activeId]).style.display = '';
   el('schemaEditorWrap').style.display = 'none';
   setStatus('schemaStatus', '', '');
-});
+}
 
-el('tabNL').addEventListener('click', () => {
-  el('tabNL').classList.add('active');
-  el('tabPre').classList.remove('active');
-  el('nlSection').style.display = '';
-  el('preSection').style.display = 'none';
-  el('schemaEditorWrap').style.display = 'none';
-  setStatus('schemaStatus', '', '');
-});
+el('tabPre').addEventListener('click', () => setActiveTab('tabPre'));
+el('tabNL').addEventListener('click', () => setActiveTab('tabNL'));
+el('tabManual').addEventListener('click', () => setActiveTab('tabManual'));
 
 // ─── Load predefined schema ────────────────────────────────────────────────────
 el('loadPreBtn').addEventListener('click', async () => {
@@ -863,6 +950,19 @@ function showSchemaEditor(schemas) {
   el('schemaEditorWrap').style.display = '';
 }
 
+// ─── Load manual schema ────────────────────────────────────────────────────────
+el('loadManualBtn').addEventListener('click', () => {
+  const raw = el('manualInput').value.trim();
+  if (!raw) { setStatus('schemaStatus', 'Paste a schema first.', 'err'); return; }
+  try {
+    const parsed = JSON.parse(raw);
+    showSchemaEditor(parsed);
+    setStatus('schemaStatus', 'Schema loaded. Review then confirm.', 'ok');
+  } catch {
+    setStatus('schemaStatus', 'Invalid JSON — check your input.', 'err');
+  }
+});
+
 // ─── Confirm schema ────────────────────────────────────────────────────────────
 el('confirmBtn').addEventListener('click', () => {
   let parsed;
@@ -894,6 +994,105 @@ function buildPipelineBox() {
   });
   html += '</div>';
   el('pipelineBox').innerHTML = html;
+}
+
+// ─── Results table ────────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatFieldName(key) {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function renderResultsTable(data) {
+  const wrap = el('resultsTableWrap');
+  const container = el('resultsTableContent');
+  container.innerHTML = '';
+
+  const extractedData =
+    data?.reflection?.extracted_data ||
+    data?.extraction?.extracted_data ||
+    {};
+
+  const docType =
+    data?.doc_type_check?.extracted_data?.document_type ||
+    data?.doc_type_check?.document_type ||
+    null;
+
+  const validationStatus =
+    data?.reflection?.status ||
+    data?.validation?.status ||
+    null;
+
+  const validationFeedback =
+    data?.reflection?.validation?.feedback ||
+    data?.validation?.feedback ||
+    null;
+
+  const attempt = data?.reflection?.attempt || null;
+
+  const hasExtracted = Object.keys(extractedData).length > 0;
+  if (!hasExtracted && !docType && !validationStatus) {
+    wrap.style.display = 'none';
+    return;
+  }
+
+  let html = '<div class="results-summary">';
+  if (docType) {
+    html +=
+      '<div class="summary-chip">' +
+      '<div class="summary-chip-label">Document Type</div>' +
+      '<div class="summary-chip-value">' + escapeHtml(docType) + '</div>' +
+      '</div>';
+  }
+  if (validationStatus) {
+    const isValid = validationStatus.toLowerCase() === 'valid';
+    html +=
+      '<div class="summary-chip">' +
+      '<div class="summary-chip-label">Validation</div>' +
+      '<span class="status-badge ' + (isValid ? 'valid' : 'invalid') + '">' +
+      (isValid ? '&#10003; Valid' : '&#10007; Invalid') +
+      '</span></div>';
+  }
+  if (attempt) {
+    html +=
+      '<div class="summary-chip">' +
+      '<div class="summary-chip-label">Completed In</div>' +
+      '<div class="summary-chip-value">' + attempt + ' attempt' + (attempt > 1 ? 's' : '') + '</div>' +
+      '</div>';
+  }
+  html += '</div>';
+
+  if (validationFeedback && validationStatus && validationStatus.toLowerCase() !== 'valid') {
+    html +=
+      '<div class="validation-feedback"><strong>Validation Feedback:</strong> ' +
+      escapeHtml(validationFeedback) +
+      '</div>';
+  }
+
+  if (hasExtracted) {
+    html += '<table class="results-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
+    for (const [key, value] of Object.entries(extractedData)) {
+      const displayValue =
+        value === null || value === undefined
+          ? '<em style="color:var(--muted)">—</em>'
+          : typeof value === 'object'
+            ? '<code style="font-size:0.78rem">' + escapeHtml(JSON.stringify(value)) + '</code>'
+            : escapeHtml(String(value));
+      html +=
+        '<tr><td class="field-name">' + escapeHtml(formatFieldName(key)) + '</td>' +
+        '<td>' + displayValue + '</td></tr>';
+    }
+    html += '</tbody></table>';
+  }
+
+  container.innerHTML = html;
+  wrap.style.display = '';
 }
 
 // ─── Run services ──────────────────────────────────────────────────────────────
@@ -937,10 +1136,19 @@ el('runBtn').addEventListener('click', async () => {
     if (!res.ok) throw new Error(data.detail || 'API call failed');
     el('runResponse').textContent = JSON.stringify(data, null, 2);
     setStatus('runStatus', 'Done ✓', 'ok');
+    renderResultsTable(data);
+    const finalSchema = data?.reflection?.final_schema || data?.final_schema;
+    if (finalSchema) {
+      el('finalSchemaBox').value = finalSchema;
+      el('finalSchemaWrap').style.display = '';
+    } else {
+      el('finalSchemaWrap').style.display = 'none';
+    }
   } catch (err) {
     clearInterval(ticker);
     setStatus('runStatus', 'Error: ' + err.message, 'err');
     el('runResponse').textContent = err.message;
+    el('resultsTableWrap').style.display = 'none';
   }
 });
 
@@ -1000,6 +1208,14 @@ async function sendFile(file) {
     setStatus('docStatus', 'Error: ' + err.message, 'err');
   }
 }
+
+// Copy final schema
+el('copySchemaBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText(el('finalSchemaBox').value).then(() => {
+    el('copySchemaBtn').textContent = 'Copied ✓';
+    setTimeout(() => { el('copySchemaBtn').textContent = 'Copy to Clipboard'; }, 2000);
+  });
+});
 
 // File path method
 el('loadDocBtn').addEventListener('click', async () => {

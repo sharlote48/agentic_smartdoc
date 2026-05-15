@@ -8,14 +8,13 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 
 def _create_llm() -> ChatGoogleGenerativeAI:
-	"""Create a ChatGoogleGenerativeAI instance with gemini-2.5-flash-lite."""
 	load_dotenv()
 	api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GENAI_API_KEY")
 	if not api_key:
 		raise ValueError("Set GOOGLE_API_KEY or GENAI_API_KEY in environment/.env")
 
 	return ChatGoogleGenerativeAI(
-		model="gemini-2.5-flash-lite",
+		model=os.getenv("GEMINI_MODEL"),
 		temperature=0,
 		max_retries=3,
 	)
