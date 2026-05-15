@@ -117,7 +117,11 @@ async def universal_agent_loop(
         "feedback": last_feedback,
         "extracted_data": {},
         "logs": logs,
-        "final_schema": current_instructions,
+        "final_schema": {
+            "image_filename": image_filename,
+            "fields": extraction_fields,
+            "instructions": current_instructions,
+        },
     }
 
 
